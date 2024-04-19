@@ -1,0 +1,58 @@
+#!/bin/sh
+#|-*- mode:lisp -*-|#
+#|
+exec ros -Q -- $0 "$@"
+|#
+(progn ;;init forms
+  (ros:ensure-asdf)
+  #+quicklisp(ql:quickload '(:yason :serapeum) :silent t)
+  )
+
+(defpackage :ros.script.echo.3922517100
+  (:use :cl))
+(in-package :ros.script.echo.3922517100)
+
+;; (setq yason:*parse-object-as* :alist)
+(setq yason:*symbol-key-encoder* #'yason:encode-symbol-as-lowercase)
+
+(defparameter *node-id* nil)
+
+(defun send (dest msg-id body)
+  (yason:encode (serapeum:dict
+                  :src (or *node-id* "missing")
+                  :dest dest
+                  :body (serapeum:dict*
+                          body
+                          :msg_id msg-id))
+                *standard-output*)
+  (princ #\Newline))
+
+(defun reply (request body)
+  (let* ((msg-id (serapeum:href-default -2 request "body" "msg_id"))
+         (reply-id (1+ msg-id))
+         (dest (serapeum:href-default nil request "src")))
+    (send dest reply-id (serapeum:dict* body :in_reply_to msg-id))))
+
+(defun parse-input (line)
+  (let ((parsed (yason:parse line)))
+    (format *error-output* "Received ~A~&" parsed)
+    (alexandria:eswitch ((serapeum:href-default 'missing-type parsed "body" "type") :test #'equal)
+                        ("init" (progn
+                                  (setf *node-id* (serapeum:href-default 'missing-node-id parsed "body" "node_id"))
+                                  (unless (eq *node-id* 'missing-node-id)
+                                    (format *error-output* "Initialized node ~A~&" *node-id*))
+                                  (reply parsed (serapeum:dict
+                                                  :type "init_ok"))))
+                        ("echo" (progn
+                                  (let ((body (serapeum:href-default (serapeum:dict) parsed "body")))
+                                    (format *error-output* "Echoing ~A~&" body)
+                                    (reply parsed (serapeum:dict*
+                                                    body
+                                                    :type "echo_ok"))))))))
+
+(defun main (&rest argv)
+  (declare (ignorable argv))
+  (loop for line = (read-line *standard-input* nil :eof)
+        until (eq line :eof)
+        do (parse-input line)))
+;;; vim: set ft=lisp lisp:
