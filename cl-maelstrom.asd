@@ -2,7 +2,8 @@
   :version "0.1.0"
   :author ""
   :license ""
-  :depends-on (:alexandria
+  :depends-on (:access
+               :alexandria
                :serapeum
                :yason)
   :components ((:module "src"
