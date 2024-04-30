@@ -6,11 +6,12 @@
                :alexandria
                :serapeum
                :yason)
+  :serial t
   :components ((:module "src"
                 :components
                 ((:file "package")
-                 (:file "message-io")
-                 (:file "main"))))
+                 (:file "message")
+                 (:file "node"))))
   :description ""
   :in-order-to ((test-op (test-op "cl-maelstrom/tests"))))
 

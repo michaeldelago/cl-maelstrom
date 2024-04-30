@@ -13,7 +13,8 @@ exec ros -m -Q -s cl-maelstrom -- $0 "$@"
 
 (defun main (&rest argv)
   (declare (ignorable argv))
-  (loop for line = (read-line *standard-input* nil :eof)
-        until (eq line :eof)
-        do (cl-maelstrom:parse-input line)))
+  (let ((node (cl-maelstrom:make-node)))
+    (loop for line = (read-line *standard-input* nil :eof)
+          until (eq line :eof)
+          do (cl-maelstrom:parse-input node line))))
 ;;; vim: set ft=lisp lisp:
