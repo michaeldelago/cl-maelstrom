@@ -1,6 +1,7 @@
 (defpackage :cl-maelstrom
   (:use :cl)
   (:import-from :access #:accesses)
+  (:import-from :serapeum #:op)
   (:export #:make-node
            #:parse-input))
 

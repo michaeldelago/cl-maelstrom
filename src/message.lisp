@@ -6,7 +6,7 @@
   (body nil))
 
 (defmethod yason:encode ((message message) &optional (stream *standard-output*))
-  (yason:with-output (stream)
+  (yason:with-output-to-string* ()
     (yason:with-object ()
       (yason:encode-object-element "src" (message-src message))
       (yason:encode-object-element "dest" (message-dest message))
@@ -33,3 +33,6 @@
 
 (defun message-broadcast-ok ()
   (make-message :body '((:type . "broadcast_ok"))))
+
+(defun message-add-ok ()
+  (make-message :body '((:type . "add_ok"))))

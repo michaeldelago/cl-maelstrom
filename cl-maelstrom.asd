@@ -4,12 +4,15 @@
   :license ""
   :depends-on (:access
                :alexandria
+               :calispel
                :serapeum
                :yason)
   :serial t
   :components ((:module "src"
                 :components
                 ((:file "package")
+                 (:file "scheduler")
+                 (:file "printer")
                  (:file "message")
                  (:file "node"))))
   :description ""
