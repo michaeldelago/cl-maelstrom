@@ -23,9 +23,12 @@
 (defun message-topology-ok ()
   (make-message :body '((:type . "topology_ok"))))
 
-(defun message-read-ok (messages)
-  (make-message :body `((:type . "read_ok")
-                        (:messages . ,messages))))
+(defun message-read-ok (messages value)
+  (let ((body '((:type . "read_ok"))))
+    (when messages 
+      (push (cons :messages messages) body))
+    (push (cons :value value) body)
+    (make-message :body body)))
 
 (defun message-broadcast (message)
   (make-message :body `((:type . "broadcast")
@@ -36,3 +39,11 @@
 
 (defun message-add-ok ()
   (make-message :body '((:type . "add_ok"))))
+
+(defun message-replicate (set)
+  (make-message :body `((:type . "replicate")
+                        (:value . ,set))))
+
+(defun message-with-dest (dest message)
+  (setf (message-dest message) dest)
+  message)
