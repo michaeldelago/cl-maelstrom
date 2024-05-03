@@ -1,0 +1,119 @@
+#!/bin/sh
+#|-*- mode:lisp -*-|#
+#|
+exec ros -Q -s cl-maelstrom -- $0 "$@"
+|#
+(progn ;;init forms
+  (ros:ensure-asdf)
+  #+quicklisp(ql:quickload '(:bordeaux-threads :calispel :alexandria :serapeum :yason :access) :silent t)
+  )
+
+(defpackage :ros.script.broadcast.3923729305
+  (:use :cl :cl-maelstrom)
+  (:import-from :access #:accesses)
+  (:import-from :serapeum #:op
+                          #:synchronized)
+  (:import-from :alexandria #:if-let
+                            #:eswitch))
+(in-package :ros.script.broadcast.3923729305)
+
+(defun plog (log-message)
+  (print-stderr (format nil "~:@A~&" log-message)))
+
+(defstruct node
+  id
+  other-node-ids
+  neighbors
+  messages
+  callbacks
+  (next-msg-id (bt2:make-atomic-integer)))
+
+(defmethod send ((node node) message)
+  (setf (message-src message) (node-id node))
+  (print-stdout (format nil "~A~&" (yason:encode message))))
+
+(defmethod reply ((node node) message response)
+  (with-slots (body)
+    response
+    (setf (accesses body :in_reply_to) (accesses message :body :msg_id))
+    (setf (accesses body :msg_id) (bt2:atomic-integer-incf (node-next-msg-id node))))
+  (send node (message-with-dest (accesses message :src) response)))
+
+(defun rpc (node message callback)
+  (synchronized ((node-callbacks node))
+                (let ((msg-id (bt2:atomic-integer-incf (node-next-msg-id node))))
+                  (push (cons msg-id callback) (node-callbacks node))
+                  (setf (accesses (message-body message) :msg_id) msg-id)))
+  (plog (format nil "Sending rpc message ~A~&" message))
+  (send node message))
+
+(defun handle-init (node message)
+  (if (node-id node)
+    (plog (format nil "Node ~A already initialized~&" (node-id node)))
+    (progn 
+      (with-slots (id other-node-ids)
+        node
+        (setf id (accesses message :body :node_id))
+        (setf other-node-ids (accesses message :body :node_ids)))
+      (plog (format nil "Initialized Node ~A~&" (node-id node)))
+      (reply node message (message-init-ok)))))
+
+(defun handle-read (node message)
+  (with-slots (messages) node
+    (synchronized (messages)
+                  (reply node message (make-message :body `((:type . "read_ok")
+                                                            (:messages . ,messages)))))))
+
+(defun handle-topology (node message)
+  (with-slots (id neighbors) node
+    (setf neighbors (accesses message :body :topology (intern (string-upcase id) "KEYWORD")))
+    (plog (format nil "My neighbors are ~A~&" neighbors)))
+  (reply node message (message-topology-ok)))
+
+(defun handle-broadcast (node message)
+  (reply node message (message-broadcast-ok))
+  (let ((m (accesses message :body :message))
+        new-message)
+    (synchronized ((node-messages node))
+                  (unless (find m (node-messages node) :test #'equal)
+                    (push m (node-messages node))
+                    (setf new-message t)))
+    (when new-message
+      (let ((unacked (remove (accesses message :src) (node-neighbors node) :test #'equal)))
+        (loop while (not (alexandria:emptyp unacked))
+              do (dolist (neighbor unacked)
+                   (rpc node
+                        (message-with-dest neighbor (message-broadcast m))
+                        (lambda (node response)
+                          (declare (ignorable node))
+                          (plog (format nil "Got response ~A~&" response))
+                          (when (equal (accesses response :body :type) "broadcast_ok")
+                            (setf unacked (remove neighbor unacked :test #'equal))))))
+              (sleep 1))))))
+
+(defmethod parse-input ((node node) line)
+  (let ((parsed (yason:parse line)))
+    (bt2:make-thread
+      (lambda ()
+        (plog (format nil "Received ~A~&" parsed)) 
+        (if-let ((in-reply-to (accesses parsed :body :in_reply_to)))
+                (with-slots (callbacks) node
+                  (let ((handler (accesses callbacks in-reply-to)))
+                    (prog1
+                      (funcall handler node parsed)
+                      (synchronized (callbacks)
+                                    (setf callbacks (remove in-reply-to callbacks :key 'car))))))
+                (eswitch ((accesses parsed :body :type) :test #'equal)
+                         ("init" (handle-init node parsed))
+                         ("read" (handle-read node parsed))
+                         ("topology" (handle-topology node parsed))
+                         ("broadcast" (handle-broadcast node parsed))))))))
+
+(defun main (&rest argv)
+  (declare (ignorable argv))
+  (let ((node (make-node)))
+    (setf cl-maelstrom::*printer* (start-printer))
+    (loop for line = (read-line *standard-input* nil :eof)
+          until (eq line :eof)
+          do (parse-input node line))))
+;;; vim: set ft=lisp lisp:

@@ -3,8 +3,18 @@
   (:import-from :access #:accesses)
   (:import-from :serapeum #:op
                           #:synchronized)
+  (:import-from :alexandria #:if-let
+                            #:eswitch)
   (:export #:make-node
-           #:parse-input))
+           #:parse-input
+           #:message
+           #:body
+           #:src
+           #:dest
+           #:make-message
+           #:message-src
+           #:message-dest
+           #:message-body))
 
 (setf yason:*parse-object-as* :alist)
 (setf yason:*parse-object-key-fn* (serapeum:op (intern (string-upcase _) "KEYWORD")))

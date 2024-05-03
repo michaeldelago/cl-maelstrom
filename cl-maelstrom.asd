@@ -13,8 +13,7 @@
                 ((:file "package")
                  (:file "scheduler")
                  (:file "printer")
-                 (:file "message")
-                 (:file "node"))))
+                 (:file "message"))))
   :description ""
   :in-order-to ((test-op (test-op "cl-maelstrom/tests"))))
 
